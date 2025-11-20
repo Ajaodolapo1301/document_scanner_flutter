@@ -25,6 +25,12 @@ rootProject.allprojects {
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
+// Configure Kotlin JVM target for all tasks
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+}
 
 android {
     namespace 'com.document.scanner.flutter.document_scanner_flutter'
