@@ -27,6 +27,7 @@ apply plugin: 'kotlin-android'
 
 
 android {
+    namespace 'com.document.scanner.flutter.document_scanner_flutter'
     compileSdkVersion 29
 
     defaultConfig {
