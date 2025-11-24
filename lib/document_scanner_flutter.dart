@@ -65,6 +65,8 @@ class DocumentScannerFlutter {
         isDismissible: false,
         builder: (BuildContext bc) {
           return Container(
+
+            padding: const EdgeInsets.only( bottom: 30.0),
             child: new Wrap(
               children: <Widget>[
                 new ListTile(
