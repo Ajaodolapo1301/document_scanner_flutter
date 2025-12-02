@@ -5,7 +5,7 @@ buildscript {
     ext.kotlin_version = '1.7.20'
     repositories {
         google()
-        jcenter()
+        mavenCentral()
     }
 
     dependencies {
@@ -18,7 +18,7 @@ rootProject.allprojects {
     repositories {
         maven { url "https://www.jitpack.io" }
         google()
-        jcenter()
+        mavenCentral()
     }
 }
 
@@ -29,6 +29,14 @@ apply plugin: 'kotlin-android'
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     kotlinOptions {
         jvmTarget = '17'
+    }
+}
+
+// Configure Java compilation to use the same JVM target after Android plugin evaluation
+afterEvaluate {
+    tasks.withType(JavaCompile).configureEach {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 
@@ -78,8 +86,7 @@ dependencies {
     implementation 'io.reactivex.rxjava2:rxandroid:2.1.0'
     implementation 'androidx.core:core-ktx:1.5.0'
     implementation 'androidx.annotation:annotation:1.2.0'
-    /// Scan library
-    implementation 'com.android.support:appcompat-v7:22.2.0'
+    /// Scan library - REMOVED old support library, using only AndroidX
     implementation 'com.google.android.material:material:1.2.1'
     implementation 'androidx.appcompat:appcompat:1.2.0'
     implementation 'com.github.ishaquehassan:AndroidDocumentScanLibrary:1.8.2'
