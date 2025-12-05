@@ -32,6 +32,7 @@ import android.R.attr.data
 import android.content.Context
 import android.database.Cursor
 import androidx.core.net.toFile
+import androidx.core.content.FileProvider
 import com.scanlibrary.ScanActivity
 import com.scanlibrary.ScanConstants
 import kotlin.collections.HashMap
@@ -56,6 +57,7 @@ class DocumentScannerFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityA
     companion object {
         val SCAN_REQUEST_CODE: Int = 101
         private const val PERMISSION_REQUEST_CODE = 102
+        private const val PHOTO_PICKER_REQUEST_CODE = 103
         private const val TAG = "DocumentScannerPlugin"
     }
 
@@ -127,6 +129,7 @@ class DocumentScannerFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityA
         }
         
         // Check storage permissions based on API level
+        // For Android 13+ (API 33+), we use system photo picker which doesn't require READ_MEDIA_IMAGES
         if (Build.VERSION.SDK_INT < 33) {
             if (ContextCompat.checkSelfPermission(activity, android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 Log.w(TAG, "verifyAllPermissionsGranted: READ_EXTERNAL_STORAGE permission not granted")
@@ -137,13 +140,8 @@ class DocumentScannerFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityA
                 Log.w(TAG, "verifyAllPermissionsGranted: WRITE_EXTERNAL_STORAGE permission not granted")
                 return false
             }
-        } else {
-            val readMediaImages = "android.permission.READ_MEDIA_IMAGES"
-            if (ContextCompat.checkSelfPermission(activity, readMediaImages) != PackageManager.PERMISSION_GRANTED) {
-                Log.w(TAG, "verifyAllPermissionsGranted: READ_MEDIA_IMAGES permission not granted")
-                return false
-            }
         }
+        // Android 13+ uses system photo picker - no READ_MEDIA_IMAGES permission needed
         
         Log.d(TAG, "verifyAllPermissionsGranted: All permissions verified and granted")
         return true
@@ -282,6 +280,7 @@ class DocumentScannerFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityA
         }
         
         // Storage permissions - use API level check with integer (33 = Android 13)
+        // For Android 13+, we use system photo picker which doesn't require READ_MEDIA_IMAGES
         if (Build.VERSION.SDK_INT < 33) {
             // Android < 13 needs READ_EXTERNAL_STORAGE and WRITE_EXTERNAL_STORAGE
             if (ContextCompat.checkSelfPermission(activity, android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -297,16 +296,8 @@ class DocumentScannerFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityA
             } else {
                 Log.d(TAG, "checkAndRequestPermissions: WRITE_EXTERNAL_STORAGE permission already granted or not needed")
             }
-        } else {
-            // Android 13+ (API 33+) needs READ_MEDIA_IMAGES - use string literal since constant not available in SDK 30
-            val readMediaImages = "android.permission.READ_MEDIA_IMAGES"
-            if (ContextCompat.checkSelfPermission(activity, readMediaImages) != PackageManager.PERMISSION_GRANTED) {
-                permissions.add(readMediaImages)
-                Log.d(TAG, "checkAndRequestPermissions: READ_MEDIA_IMAGES permission not granted")
-            } else {
-                Log.d(TAG, "checkAndRequestPermissions: READ_MEDIA_IMAGES permission already granted")
-            }
         }
+        // Android 13+ uses system photo picker - no READ_MEDIA_IMAGES permission needed
         
         if (permissions.isEmpty()) {
             Log.d(TAG, "checkAndRequestPermissions: All permissions granted, proceeding with activity launch")
@@ -474,6 +465,27 @@ class DocumentScannerFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityA
         
         Log.d(TAG, "gallery: Activity found = ${activity.javaClass.name}")
         
+        // For Android 13+ (API 33+), use system photo picker (no permissions needed)
+        if (Build.VERSION.SDK_INT >= 33) {
+            Log.d(TAG, "gallery: Android 13+ detected, using system photo picker")
+            try {
+                val photoPickerIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "image/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                }
+                
+                val chooserIntent = Intent.createChooser(photoPickerIntent, "Select Image")
+                activity.startActivityForResult(chooserIntent, PHOTO_PICKER_REQUEST_CODE)
+                Log.d(TAG, "gallery: System photo picker launched")
+            } catch (e: Exception) {
+                Log.e(TAG, "gallery: ERROR launching photo picker", e)
+                result?.error("PHOTO_PICKER_ERROR", "Failed to launch photo picker: ${e.message}", e.stackTraceToString())
+            }
+            return
+        }
+        
+        // For Android < 13, use existing flow with permissions
+        Log.d(TAG, "gallery: Android < 13, using existing flow with permissions")
         try {
             val intent = Intent(activity, ScanActivity::class.java)
             Log.d(TAG, "gallery: Intent created for ScanActivity = ${ScanActivity::class.java.name}")
@@ -489,33 +501,14 @@ class DocumentScannerFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityA
             
             intent.putExtra(ScanConstants.OPEN_INTENT_PREFERENCE, ScanConstants.OPEN_MEDIA)
             Log.d(TAG, "gallery: Added OPEN_MEDIA preference = ${ScanConstants.OPEN_MEDIA}")
-            Log.d(TAG, "gallery: OPEN_MEDIA constant value = ${ScanConstants.OPEN_MEDIA}")
             
             composeIntentArguments(intent)
             Log.d(TAG, "gallery: Intent arguments composed")
-            
-            // Log all intent extras for debugging
-            val extras = intent.extras
-            if (extras != null) {
-                Log.d(TAG, "gallery: Intent extras keys = ${extras.keySet()}")
-                for (key in extras.keySet()) {
-                    Log.d(TAG, "gallery: Intent extra[$key] = ${extras.get(key)}")
-                }
-            } else {
-                Log.w(TAG, "gallery: Intent extras is null!")
-            }
-            
-            Log.d(TAG, "gallery: Intent details - Component=${intent.component}, Action=${intent.action}")
             
             // Check and request permissions BEFORE launching activity
             checkAndRequestPermissions(activity, intent, SCAN_REQUEST_CODE) {
                 try {
                     Log.d(TAG, "gallery: Starting activity with request code = $SCAN_REQUEST_CODE")
-                    Log.d(TAG, "gallery: Activity package name = ${activity.packageName}")
-                    Log.d(TAG, "gallery: Intent component = ${intent.component}")
-                    Log.d(TAG, "gallery: Intent package = ${intent.`package`}")
-                    Log.d(TAG, "gallery: Activity theme = ${activity.theme}")
-                    Log.d(TAG, "gallery: Verifying permissions one final time before launch")
                     
                     // Final permission check before launch
                     if (!verifyAllPermissionsGranted(activity)) {
@@ -525,63 +518,8 @@ class DocumentScannerFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityA
                     }
                     
                     Log.d(TAG, "gallery: All permissions verified, launching ScanActivity")
-                    Log.d(TAG, "gallery: About to call startActivityForResult with intent=$intent")
-                    
-                    try {
-                        activity.startActivityForResult(intent, SCAN_REQUEST_CODE)
-                        Log.d(TAG, "gallery: Activity started successfully - startActivityForResult returned")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "gallery: EXCEPTION during startActivityForResult", e)
-                        result?.error("START_ACTIVITY_EXCEPTION", "Exception starting activity: ${e.message}", e.stackTraceToString())
-                        return@checkAndRequestPermissions
-                    }
-                    
-                    // Log immediately after launch
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        Log.d(TAG, "gallery: Checking activity state immediately after launch (100ms)")
-                        val currentActivity = activityPluginBinding?.activity
-                        if (currentActivity != null) {
-                            Log.d(TAG, "gallery: Current activity = ${currentActivity.javaClass.name}")
-                            Log.d(TAG, "gallery: Current activity isFinishing = ${currentActivity.isFinishing}")
-                            Log.d(TAG, "gallery: Current activity isDestroyed = ${currentActivity.isDestroyed}")
-                        } else {
-                            Log.e(TAG, "gallery: Current activity is null after 100ms!")
-                        }
-                    }, 100)
-                    
-                    // Log after delays to check activity state and detect crashes
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        Log.d(TAG, "gallery: Checking activity state after 500ms")
-                        val currentActivity = activityPluginBinding?.activity
-                        if (currentActivity != null) {
-                            Log.d(TAG, "gallery: Current activity = ${currentActivity.javaClass.name}")
-                            Log.d(TAG, "gallery: Current activity isFinishing = ${currentActivity.isFinishing}")
-                            Log.d(TAG, "gallery: Current activity isDestroyed = ${currentActivity.isDestroyed}")
-                        } else {
-                            Log.e(TAG, "gallery: Current activity is null after 500ms!")
-                        }
-                    }, 500)
-                    
-                    // Check again after 2 seconds to see if ScanActivity crashed
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        Log.d(TAG, "gallery: Checking activity state after 2000ms")
-                        val currentActivity = activityPluginBinding?.activity
-                        if (currentActivity != null) {
-                            val activityName = currentActivity.javaClass.name
-                            Log.d(TAG, "gallery: Current activity after 2s = $activityName")
-                            if (activityName.contains("ScanActivity")) {
-                                Log.d(TAG, "gallery: ScanActivity is still active")
-                            } else {
-                                Log.w(TAG, "gallery: ScanActivity may have finished/crashed, back to $activityName")
-                            }
-                        }
-                    }, 2000)
-                } catch (e: android.content.ActivityNotFoundException) {
-                    Log.e(TAG, "gallery: ERROR - ActivityNotFoundException", e)
-                    result?.error("ACTIVITY_NOT_FOUND", "ScanActivity not found: ${e.message}", e.stackTraceToString())
-                } catch (e: SecurityException) {
-                    Log.e(TAG, "gallery: ERROR - SecurityException (permissions?)", e)
-                    result?.error("SECURITY_ERROR", "Security error starting activity (check permissions): ${e.message}", e.stackTraceToString())
+                    activity.startActivityForResult(intent, SCAN_REQUEST_CODE)
+                    Log.d(TAG, "gallery: Activity started successfully")
                 } catch (e: Exception) {
                     Log.e(TAG, "gallery: ERROR starting activity", e)
                     result?.error("ACTIVITY_START_FAILED", "Failed to start gallery activity: ${e.message}", e.stackTraceToString())
@@ -590,6 +528,77 @@ class DocumentScannerFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityA
         } catch (e: Exception) {
             Log.e(TAG, "gallery: ERROR in gallery method", e)
             result?.error("ERROR", "Error in gallery method: ${e.message}", e.stackTraceToString())
+        }
+    }
+    
+    private fun copyImageToInternalStorage(activity: Activity, contentUri: Uri): String? {
+        return try {
+            val inputStream = activity.contentResolver.openInputStream(contentUri)
+            val internalDir = activity.filesDir
+            val imageFile = File(internalDir, "scanner_temp_${System.currentTimeMillis()}.jpg")
+            
+            inputStream?.use { input ->
+                imageFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            
+            Log.d(TAG, "copyImageToInternalStorage: Image copied to ${imageFile.absolutePath}")
+            imageFile.absolutePath
+        } catch (e: Exception) {
+            Log.e(TAG, "copyImageToInternalStorage: ERROR copying image", e)
+            null
+        }
+    }
+    
+    private fun launchScanActivityWithImage(activity: Activity, imagePath: String) {
+        try {
+            val intent = Intent(activity, ScanActivity::class.java)
+            intent.putExtra(ScanConstants.OPEN_INTENT_PREFERENCE, ScanConstants.OPEN_MEDIA)
+            
+            // Create a content URI using FileProvider for the copied image
+            // Use the library's FileProvider (authority: "com.scanlibrary.provider")
+            // Note: ScanActivity may not support pre-selected images - this is experimental
+            // If this doesn't work, we may need to use a different approach or contact library maintainer
+            val imageFile = File(imagePath)
+            val imageUri = try {
+                FileProvider.getUriForFile(
+                    activity,
+                    "com.scanlibrary.provider",
+                    imageFile
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "launchScanActivityWithImage: FileProvider error, trying alternative approach", e)
+                // Fallback - try content URI or direct file path
+                // Note: This may not work on all Android versions
+                if (Build.VERSION.SDK_INT >= 24) {
+                    // Android 7.0+ requires FileProvider
+                    result?.error("FILE_PROVIDER_ERROR", "Failed to create file URI: ${e.message}", null)
+                    return
+                } else {
+                    Uri.fromFile(imageFile)
+                }
+            }
+            
+            // Try to pass the image URI - this may or may not work depending on ScanActivity implementation
+            intent.putExtra(ScanConstants.SCANNED_RESULT, imageUri)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            
+            composeIntentArguments(intent)
+            
+            // Only need camera permission for scanning
+            if (ContextCompat.checkSelfPermission(activity, android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                pendingIntent = intent
+                pendingRequestCode = SCAN_REQUEST_CODE
+                ActivityCompat.requestPermissions(activity, arrayOf(android.Manifest.permission.CAMERA), PERMISSION_REQUEST_CODE)
+                return
+            }
+            
+            activity.startActivityForResult(intent, SCAN_REQUEST_CODE)
+            Log.d(TAG, "launchScanActivityWithImage: ScanActivity launched with image URI = $imageUri")
+        } catch (e: Exception) {
+            Log.e(TAG, "launchScanActivityWithImage: ERROR", e)
+            result?.error("SCAN_ACTIVITY_ERROR", "Failed to launch ScanActivity: ${e.message}", e.stackTraceToString())
         }
     }
 
@@ -612,10 +621,56 @@ class DocumentScannerFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityA
         Log.d(TAG, "onActivityResult: ========== CALLED ==========")
         Log.d(TAG, "onActivityResult: requestCode=$requestCode, resultCode=$resultCode")
         Log.d(TAG, "onActivityResult: data=$data")
-        Log.d(TAG, "onActivityResult: SCAN_REQUEST_CODE=$SCAN_REQUEST_CODE")
+        Log.d(TAG, "onActivityResult: SCAN_REQUEST_CODE=$SCAN_REQUEST_CODE, PHOTO_PICKER_REQUEST_CODE=$PHOTO_PICKER_REQUEST_CODE")
         Log.d(TAG, "onActivityResult: RESULT_OK=${Activity.RESULT_OK}, RESULT_CANCELED=${Activity.RESULT_CANCELED}")
-        Log.d(TAG, "onActivityResult: Stack trace = ${Thread.currentThread().stackTrace.take(5).joinToString("\n")}")
         
+        // Handle photo picker result (Android 13+)
+        if (requestCode == PHOTO_PICKER_REQUEST_CODE) {
+            return when (resultCode) {
+                Activity.RESULT_OK -> {
+                    Log.d(TAG, "onActivityResult: Photo picker returned OK")
+                    val activity = activityPluginBinding?.activity
+                    if (activity == null) {
+                        Log.e(TAG, "onActivityResult: ERROR - activity is null!")
+                        result?.error("ACTIVITY_NULL", "Activity is null when processing photo picker result", null)
+                        return true
+                    }
+                    
+                    val selectedImageUri = data?.data
+                    if (selectedImageUri == null) {
+                        Log.e(TAG, "onActivityResult: ERROR - no image URI from photo picker")
+                        result?.error("NO_IMAGE_URI", "No image selected from photo picker", null)
+                        return true
+                    }
+                    
+                    Log.d(TAG, "onActivityResult: Selected image URI = $selectedImageUri")
+                    
+                    // Copy image to internal storage
+                    val imagePath = copyImageToInternalStorage(activity, selectedImageUri)
+                    if (imagePath == null) {
+                        Log.e(TAG, "onActivityResult: ERROR - failed to copy image to internal storage")
+                        result?.error("IMAGE_COPY_FAILED", "Failed to copy selected image", null)
+                        return true
+                    }
+                    
+                    // Launch ScanActivity with the copied image
+                    launchScanActivityWithImage(activity, imagePath)
+                    true
+                }
+                Activity.RESULT_CANCELED -> {
+                    Log.d(TAG, "onActivityResult: Photo picker canceled by user")
+                    result?.error("USER_CANCELED", "User canceled photo selection", null)
+                    true
+                }
+                else -> {
+                    Log.w(TAG, "onActivityResult: Photo picker returned unknown result code = $resultCode")
+                    result?.error("UNKNOWN_RESULT", "Photo picker returned unknown result code: $resultCode", null)
+                    true
+                }
+            }
+        }
+        
+        // Handle ScanActivity result
         if (requestCode == SCAN_REQUEST_CODE) {
             Log.d(TAG, "onActivityResult: Request code matches SCAN_REQUEST_CODE")
             return when (resultCode) {
