@@ -46,20 +46,21 @@ try {
 }
 ```
 
-#### Android Scanner labels customization
+#### Scanner labels customization
 ```dart
 try {
-    // Other Android Scanner labels customization 
-    var androidLabelsConfigs = {
-        ScannerConfigsAndroid.ANDROID_NEXT_BUTTON_TITLE : "Next Step",
-        ScannerConfigsAndroid.ANDROID_SAVE_BUTTON_TITLE: "Save It",
-        ScannerConfigsAndroid.ANDROID_ROTATE_LEFT_TITLE: "Turn it left",
-        ScannerConfigsAndroid.ANDROID_ROTATE_RIGHT_TITLE: "Turn it right",
-        ScannerConfigsAndroid.ANDROID_ORIGINAL_TITLE: "Original",
-        ScannerConfigsAndroid.ANDROID_BMW_TITLE: "B & W"
+    // Scanner labels customization 
+    var labelsConfigs = {
+        ScannerLabelsConfig.PICKER_CAMERA_LABEL : "Camera",
+        ScannerLabelsConfig.PICKER_GALLERY_LABEL: "Photo Library",
+        ScannerLabelsConfig.PDF_GALLERY_DONE_LABEL: "Done",
+        ScannerLabelsConfig.PDF_GALLERY_ADD_IMAGE_LABEL: "Add Image"
     } 
 
-    File scannedDoc = await DocumentScannerFlutter.launchForPdf(source: ScannerFileSource.CAMERA,androidConfigs: androidLabelsConfigs); 
+    File scannedDoc = await DocumentScannerFlutter.launchForPdf(
+        source: ScannerFileSource.CAMERA,
+        labelsConfig: labelsConfigs
+    ); 
     // `scannedDoc` will be the PDF file generated from scanner
 } on PlatformException {
     // 'Failed to get document path or operation cancelled!';

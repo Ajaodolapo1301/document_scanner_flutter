@@ -14,14 +14,9 @@ class DocumentScannerFlutter {
       const MethodChannel('document_scanner_flutter');
 
   static Future<File?> _scanDocument(
-      ScannerFileSource source, Map<dynamic, String> androidConfigs) async {
-    Map<String, String?> finalAndroidArgs = {};
-    for (var entry in androidConfigs.entries) {
-      finalAndroidArgs[describeEnum(entry.key)] = entry.value;
-    }
-
+      ScannerFileSource source, Map<dynamic, String> labelsConfig) async {
     String? path = await _channel.invokeMethod(
-        describeEnum(source).toLowerCase(), finalAndroidArgs);
+        describeEnum(source).toLowerCase());
     if (path == null) {
       return null;
     } else {
@@ -35,7 +30,7 @@ class DocumentScannerFlutter {
   /// Scanner to generate PDF file from scanned images
   ///
   /// `context` : BuildContext to attach PDF generation widgets
-  /// `androidConfigs` : Android scanner labels configuration
+  /// `labelsConfig` : Scanner labels configuration
   static Future<File?> launchForPdf(BuildContext context,
       {ScannerFileSource? source,
       Map<dynamic, String> labelsConfig = const {}}) async {
@@ -53,7 +48,7 @@ class DocumentScannerFlutter {
   ///
   /// `context` : BuildContext to attach source selection
   /// `source` : Either ScannerFileSource.CAMERA or ScannerFileSource.GALLERY
-  /// `androidConfigs` : Android scanner labels configuration
+  /// `labelsConfig` : Scanner labels configuration
   static Future<File?>? launch(BuildContext context,
       {ScannerFileSource? source,
       Map<dynamic, String> labelsConfig = const {}}) {

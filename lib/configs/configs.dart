@@ -1,23 +1,9 @@
 /// To Configure File source to get Image from
 enum ScannerFileSource { CAMERA, GALLERY }
 
-/// To configure Android Scanner Labels
+/// To configure Scanner Labels
 enum ScannerLabelsConfig {
-  /// Android scanner specific labels
-  ANDROID_NEXT_BUTTON_LABEL,
-  ANDROID_SAVE_BUTTON_LABEL,
-  ANDROID_ROTATE_LEFT_LABEL,
-  ANDROID_ROTATE_RIGHT_LABEL,
-  ANDROID_ORIGINAL_LABEL,
-  ANDROID_BMW_LABEL,
-  ANDROID_SCANNING_MESSAGE,
-  ANDROID_LOADING_MESSAGE,
-  ANDROID_APPLYING_FILTER_MESSAGE,
-  ANDROID_CANT_CROP_ERROR_TITLE,
-  ANDROID_CANT_CROP_ERROR_MESSAGE,
-  ANDROID_OK_LABEL,
-
-  /// Unviersal Labels config
+  /// Universal Labels config
   PDF_GALLERY_EMPTY_TITLE,
   PDF_GALLERY_EMPTY_MESSAGE,
   PDF_GALLERY_FILLED_TITLE_SINGLE,
